@@ -1,0 +1,49 @@
+ 
+PROC IMPORT OUT= WORK.eh_names
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\eh_names.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+data eh_names;
+set eh_names;
+keep id name companyname;
+run;
+
+data eh_names;
+set eh_names;
+where id;
+run;	   
+PROC IMPORT OUT= WORK.eh_ret
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\eh_ret.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.eh_aum
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\eh_ret.aum" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+
+proc sql;
+create table eh_ret_full
+as select a.*,b.*
+from eh_ret as a left join eh_aum as b
+on a.id=b.id and a.date=b.date;
+quit;
+
+proc sort data=eh_ret_full;
+by id date;
+quit;
+
+data eh_ret_final;
+set eh_ret_full;
+where id;
+run;
+
+	 

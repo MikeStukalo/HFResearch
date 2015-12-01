@@ -1,0 +1,739 @@
+ 
+* Set library path. !!!!!!!Check the path!!!!!!!!!!!!;
+
+libname data 'c:\Users\Mikhail\Desktop\Funds\Data\';
+
+* We create a list of unique funds in adv database;
+
+ proc sort data=data.adv_base out=adv_names nodupkey;
+by fund_id;
+quit;
+
+* We create a stripped version of adv_names keeping only relevant columns for mapping;
+
+data adv_stripped;
+set adv_names;
+keep Fund_Name _1A Fund_ID;
+run;
+
+* rename variable;
+data union_stripped;
+set data.HFR_names;
+fname=name;
+drop name;
+run;
+
+* Here we start the mapping process;
+*First, we try to get direct matchis without cleaning legal names;
+
+data adv_tomatch;
+set adv_stripped; 
+name=upcase(Fund_Name);
+name= compress(name,'?');
+name= compress(name,','); 	
+name= compress(name,'.'); 	
+name= compress(name,'('); 	
+name= compress(name,')'); 	
+name= compress(name,'$'); 	
+name= compress(name,'{'); 	
+name= compress(name,'}'); 	
+name= compress(name,'+'); 	
+name= compress(name,'/'); 	
+name= compress(name,':'); 
+name= compress(name,'-');
+name= tranwrd(name,'.',' ');
+name= tranwrd(name,'LTD','LIMITED');
+run;
+
+data union_tomatch;
+set union_stripped; 
+unname= upcase(fname);  
+unname= compress(unname,'?');
+unname= compress(unname,','); 
+unname= compress(unname,'.'); 
+unname= compress(unname,'('); 
+unname= compress(unname,')');
+unname= compress(unname,'$'); 
+unname= compress(unname,'{'); 
+unname= compress(unname,'}'); 
+unname= compress(unname,'+'); 
+unname= compress(unname,'/'); 
+unname= compress(unname,':'); 
+unname= compress(unname,'-');
+unname= tranwrd(unname,'.',' ');
+unname= tranwrd(unname,'LTD','LIMITED');
+run;
+
+data adv_tomatch;
+set adv_tomatch;
+advword1=scan(name,1,' ');
+advword2=scan(name,2,' ');
+advword3=scan(name,3,' ');
+advword4=scan(name,4,' ');
+advword5=scan(name,5,' ');
+advword6=scan(name,6,' ');
+advword7=scan(name,7,' ');
+advword8=scan(name,8,' ');
+run;
+
+
+data union_tomatch;
+set union_tomatch;
+unword1=scan(unname,1,' ');
+unword2=scan(unname,2,' ');
+unword3=scan(unname,3,' ');
+unword4=scan(unname,4,' ');
+unword5=scan(unname,5,' ');
+unword6=scan(unname,6,' ');
+unword7=scan(unname,7,' ');
+unword8=scan(unname,8,' ');
+run;
+
+proc sql;
+create table cleanmatch
+as select *
+from adv_tomatch as a left join Union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2 and 
+a.advword3=b.unword3 and a.advword4=b.unword4 and a.advword5=b.unword5 and a.advword6=b.unword6
+and a.advword7=b.unword7 and a.advword8=b.unword8;
+quit;
+
+data goodcleanmatch;
+set cleanmatch;
+where unname;
+keep fund_id fund_name _1A id fname companyname;
+run;
+
+data goodcleanmatch;
+set goodcleanmatch;
+ADV_name=Fund_name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+drop Fund_name _1A fname companyname;
+run;
+
+
+
+*********************************************************************************************
+Create databases for imperfect match
+*********************************************************************************************;
+
+data step2_adv_tomatch;
+set cleanmatch;
+where unname=' ';
+keep fund_id name _1A;
+run;
+
+proc sql;
+create table step2_union_tomatch
+as select *
+from Union_tomatch as a left join adv_tomatch as b
+on a.unword1=b.advword1 and a.unword2=b.advword2 and 
+a.unword3=b.advword3 and a.unword4=b.advword4 and a.unword5=b.advword5 and a.unword6=b.advword6
+and a.unword7=b.advword7 and a.unword8=b.advword8;
+quit; 
+
+data step2_union_tomatch;
+set step2_union_tomatch;
+where name=' ';
+keep id unname fname companyname;
+run;
+
+*********************************************************************************************
+Start imperfect match
+*********************************************************************************************;
+* Cleaning up the names of funds in ADV database from legal entities;
+data step2_adv_tomatch;
+set step2_adv_tomatch; 
+name= tranwrd(name,'MGMT','MANAGEMENT'); 	
+name= tranwrd(name,'MGT','MANAGEMENT'); 
+name= tranwrd(name,'INTL','INTERNATIONAL'); 
+name= tranwrd(name,'THE ',' '); 
+name= tranwrd(name,' LLC',' '); 
+name= tranwrd(name,' LLP',' '); 
+name= tranwrd(name,' INC',' '); 	 
+name= tranwrd(name,'&','and'); 	
+name= tranwrd(name,' LP',' '); 	
+name= tranwrd(name,' LTD',' '); 
+name= tranwrd(name,' ADVISOR',' '); 	
+name= tranwrd(name,' ADVISO',' '); 	
+name= tranwrd(name,' LIMITED',' '); 
+name= tranwrd(name,' SA',' '); 	
+name= tranwrd(name,' AG',' '); 	
+name= tranwrd(name,' LL',' '); 
+name= tranwrd(name,' GRO',' '); 
+name= tranwrd(name,' CORP',' '); 
+name= tranwrd(name,' CO',' ');			
+run;
+
+*Cleaning up the names in union database from legal entities;
+data Step2_union_tomatch;
+set Step2_union_tomatch;  
+unname= tranwrd(unname,' MGMT',' MANAGEMENT'); 	
+unname= tranwrd(unname,' MGT',' MANAGEMENT'); 
+unname= tranwrd(unname,' INTL','INTERNATIONAL');
+unname= tranwrd(unname,'THE ',' '); 
+unname= tranwrd(unname,' LLC',' '); 
+unname= tranwrd(unname,' LLP',' ');
+unname= tranwrd(unname,' INC',' '); 		
+unname= tranwrd(unname,'&','and'); 	
+unname= tranwrd(unname,' LP',' '); 
+unname= tranwrd(unname,' LTD',' '); 
+unname= tranwrd(unname,' ADVISOR',' '); 	
+unname= tranwrd(unname,' ADVISO',' '); 	
+unname= tranwrd(unname,' LIMITED',' '); 
+unname= tranwrd(unname,' SA',' '); 	
+unname= tranwrd(unname,' AG',' '); 	
+unname= tranwrd(unname,' LL',' '); 
+unname= tranwrd(unname,' GRO',' '); 
+unname= tranwrd(unname,' CORP',' '); 
+unname= tranwrd(unname,' CO',' '); 
+run;
+
+*break up names of funds by first words;
+data step2_adv_tomatch;
+  set step2_adv_tomatch;
+  advword1=scan(name,1,' ');
+  advword2=scan(name,2,' ');
+  advword3=scan(name,3,' ');
+  advword4=scan(name,4,' ');
+  advword5=scan(name,5,' ');
+  advword6=scan(name,6,' ');
+  advword7=scan(name,7,' ');
+run;
+
+data Step2_union_tomatch;
+  set Step2_union_tomatch;
+  unword1=scan(unname,1,' ');
+  unword2=scan(unname,2,' ');
+  unword3=scan(unname,3,' ');
+  unword4=scan(unname,4,' ');
+  unword5=scan(unname,5,' ');
+ unword6=scan(unname,6,' ');
+ unword7=scan(unname,7,' ');
+run;
+
+*Match funds with equal seven words;
+proc sql;
+create table match7words
+as select *
+from step2_adv_tomatch as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2 and 
+a.advword3=b.unword3 and a.advword4=b.unword4 and a.advword5=b.unword5  and a.advword6=b.unword6 and a.advword7=b.unword7;
+quit;
+
+data goodmatch7;
+set match7words;
+where unname;
+run;
+
+data badmatch7;
+set match7words;
+where unname=' ';
+run;
+
+*Match funds with equal six words;
+proc sql;
+create table match6words
+as select *
+from step2_adv_tomatch as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2 and 
+a.advword3=b.unword3 and a.advword4=b.unword4 and a.advword5=b.unword5  and a.advword6=b.unword6;
+quit;
+
+data goodmatch6;
+set match6words;
+where unname;
+run;
+
+data badmatch6;
+set match6words;
+where unname=' ';
+run;
+
+
+*Match funds with equal five words;
+proc sql;
+create table match5words
+as select *
+from badmatch6 (keep= advword1 advword2 advword3 advword4 advword5 name fund_id _1A) as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2 and 
+a.advword3=b.unword3 and a.advword4=b.unword4 and a.advword5=b.unword5;
+quit;
+
+data goodmatch5;
+set match5words;
+where unname;
+run;
+
+data badmatch5;
+set match5words;
+where unname=' ';
+run;
+
+*Match funds with equal four words;
+proc sql;
+create table match4words
+as select *
+from badmatch5 (keep= advword1 advword2 advword3 advword4  name fund_id _1A) as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2 and 
+a.advword3=b.unword3 and a.advword4=b.unword4;
+quit;
+
+data goodmatch4;
+set match4words;
+where unname;
+run;
+
+data badmatch4;
+set match4words;
+where unname=' ';
+run;
+
+*Match funds with equal three words;
+proc sql;
+create table match3words
+as select *
+from badmatch4 (keep= advword1 advword2 advword3 name fund_id _1A) as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2 and 
+a.advword3=b.unword3;
+quit;
+
+data goodmatch3;
+set match3words;
+where unname;
+run;
+
+data badmatch3;
+set match3words;
+where unname=' ';
+run;
+
+*Match funds with equal two words;
+proc sql;
+create table match2words
+as select *
+from badmatch3 (keep= advword1 advword2  name fund_id _1A) as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1 and a.advword2=b.unword2;
+quit;
+
+data goodmatch2;
+set match2words;
+where unname;
+run;
+
+data badmatch2;
+set match2words;
+where unname=' ';
+run;
+
+*Match funds with equal one word;
+proc sql;
+create table match1words
+as select *
+from badmatch2 (keep= advword1 name fund_id _1A) as a left join Step2_union_tomatch as b
+on a.advword1=b.unword1;
+quit;
+
+data goodmatch1;
+set match1words;
+where unname;
+run;
+
+data badmatch1;
+set match1words;
+where unname=' ';
+run;
+
+*Cleaning results, leaving relevant columns;
+data tocheck7;
+set goodmatch7;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+
+data tocheck6;
+set goodmatch6;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+
+data tocheck5;
+set goodmatch5;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+data tocheck4;
+set goodmatch4;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+data tocheck3;
+set goodmatch3;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+data tocheck2;
+set goodmatch2;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+data tocheck1;
+set goodmatch1;
+keep name fund_id _1A  fname unname companyname id;
+run;
+
+
+
+*********************************************************************************************
+Adding assets value to files that we plan to check
+*********************************************************************************************;
+
+proc sql;
+create table adv_base_aum
+as select distinct a.*, b.*
+from data.adv_base as a left join data.sec_7b1 (keep= filingid fund_id gross_asset_value) as b
+on a.filingid=b.filingid and a.fund_id=b.fund_id;
+quit;
+
+data union_returns;
+set data.HFR_ret;
+run;
+
+
+
+*Keep maximum aum in ADV and Union;
+
+proc sort data=adv_base_aum;
+by fund_id gross_asset_value;
+run;
+
+data adv_aum;
+set adv_base_aum;
+by fund_id;
+ if last.fund_id then output;
+run;
+
+data union_returns;
+set union_returns;
+where date>'01NOV2011'd;
+run;
+
+proc sort data=union_returns;
+by id aum;
+run;
+
+data union_aum;
+set union_returns;
+by id;
+ if last.id then output;
+run;
+
+
+* Merge data;
+
+proc sql;
+create table pm
+as select *
+from goodcleanmatch as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table pm1
+as select *
+from pm  as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data pm1;
+set pm1;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK.pm1 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\clean.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+
+proc sql;
+create table a_7
+as select *
+from tocheck7 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _7
+as select *
+from A_7 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _7;
+set _7;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._7 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match7.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+* For 6 words;
+
+proc sql;
+create table a_6
+as select *
+from tocheck6 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _6
+as select *
+from A_6 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _6;
+set _6;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._6 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match6.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+* For 5 words;
+proc sql;
+create table a_5
+as select *
+from tocheck5 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _5
+as select *
+from A_5 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _5;
+set _5;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._5 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match5.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+* For 4 words;
+proc sql;
+create table a_4
+as select *
+from tocheck4 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _4
+as select *
+from A_4 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _4;
+set _4;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._4 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match4.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+* For 3 words;
+proc sql;
+create table a_3
+as select *
+from tocheck3 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _3
+as select *
+from A_3 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _3;
+set _3;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._3 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match3.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+* For 2 words;
+*!!!!!!!!!!!!!!!!!!!!!!!Decrease the number of pairs based on AUM!!!!!!!!!!!!!!!!!!!!!!!;
+
+proc sql;
+create table a_2
+as select *
+from tocheck2 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _2
+as select *
+from A_2 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _2;
+set _2;
+where aum;
+run;
+
+data _2;
+set _2;
+where gross_asset_value;
+run;
+
+data _2;
+set _2;
+where abs((gross_asset_value/1000000-aum)/(Gross_Asset_Value/1000000))<0.3;
+run;
+
+
+data _2;
+set _2;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._2 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match2.csv"
+            DBMS=CSV REPLACE; *!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+
+* For 1 words;
+*!!!!!!!!!!!!!!!!!!!!!!!Decrease the number of pairs based on AUM!!!!!!!!!!!!!!!!!!!!!!!;
+
+proc sql;
+create table a_1
+as select *
+from tocheck1 as a left join adv_aum (keep=fund_name fund_id gross_asset_value) as b
+on a.fund_id=b.fund_id;
+quit;
+
+proc sql;
+create table _1
+as select *
+from A_1 as a left join union_aum (keep=id aum) as b
+on a.id=b.id;
+quit;
+
+data _1;
+set _1;
+where aum; 
+run;
+
+data _1;
+set _1;
+where gross_asset_value;
+run;
+
+data _1;
+set _1;
+where abs((gross_asset_value/1000000-aum)/(Gross_Asset_Value/1000000))<0.3;
+run;
+
+
+data _1;
+set _1;
+ADV_name=name;
+ADV_Comp=_1A;
+Union_Name=fname;
+Union_Comp=companyname;
+ADV_AUM=Gross_Asset_Value/1000000;
+Union_AUM=aum;
+drop Fund_name _1A name fname unname companyname gross_asset_value aum;
+run;
+
+
+ *Export results;
+PROC EXPORT DATA= WORK._1 
+            OUTFILE= "C:\Users\Mikhail\Desktop\Funds\Results\HFR\match1.csv" 
+            DBMS=CSV REPLACE;*!!!!Check folder;
+     PUTNAMES=YES;
+RUN;
+	 

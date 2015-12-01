@@ -1,0 +1,72 @@
+ 
+PROC IMPORT OUT= WORK.tass_live 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\Tass_live.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.tass_dead 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\Tass_dead.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.tass_dead_com 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\Tass_dead_com.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.tass_live_com 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\Tass_live_com.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+proc sql;
+create table tass_live_full
+as select a.*, b.*
+from tass_live (keep=id name) as a left join tass_live_com (keep=id companyname) as b
+on a.id=b.id;
+quit;
+
+proc sql;
+create table tass_dead_full
+as select a.*, b.*
+from tass_dead (keep=id name) as a left join tass_dead_com (keep=id companyname) as b
+on a.id=b.id;
+quit;
+
+data tass_names;
+set tass_live_full tass_dead_full;
+run;
+	 
+  
+PROC IMPORT OUT= WORK.tass_live_ret 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\Tass_live_ret.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.tass_dead_ret 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\Tass_dead_ret.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+data tass_ret;
+set tass_dead_ret (keep=id date ret aum) tass_live_ret (keep=id date ret aum);
+format date date9.;
+run;
+
+data tass_ret;
+set tass_ret;
+aum=aum/1000000;
+run;	 
+

@@ -1,0 +1,79 @@
+ 
+PROC IMPORT OUT= WORK.hfr_live 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\hfr_live.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.hfr_dead 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\hfr_dead.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+data hfr_names;
+set hfr_live (keep= id name companyname) hfr_dead (keep= id name companyname);
+run;
+	   
+PROC IMPORT OUT= WORK.hfr_live_ret 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\hfr_live_ret.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.hfr_live_aum 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\hfr_live_aum.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.hfr_dead_ret 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\hfr_dead_ret.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+PROC IMPORT OUT= WORK.hfr_dead_aum 
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\hfr_dead_aum.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+proc sql;
+create table hfr_live
+as select a.*,b.* from
+hfr_live_ret as a left join hfr_live_aum as b
+on a.id=b.id and a.date=b.date;
+quit;
+
+data hfr_live;
+set hfr_live;
+keep id date ret aum;
+format date date9.;
+run;
+
+proc sql;
+create table hfr_dead
+as select a.*,b.* from
+hfr_dead_ret as a left join hfr_dead_aum as b
+on a.id=b.id and a.date=b.date;
+quit;
+
+data hfr_dead;
+set hfr_dead;
+keep id date ret aum;
+format date date9.;
+run;
+
+data hfr_ret;
+set hfr_dead hfr_live;
+run;
+
+
+	 

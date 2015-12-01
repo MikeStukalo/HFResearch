@@ -1,0 +1,68 @@
+ 
+PROC IMPORT OUT= WORK.ms_names
+            DATAFILE= "C:\Users\Mikhail\Desktop\Funds\RAW\ms_names.csv" 
+            DBMS=CSV REPLACE;
+     GETNAMES=YES;
+     DATAROW=2; 
+RUN;
+
+data ms_names;
+set ms_names;
+keep id name companyname;
+run;
+	 
+  
+  data WORK.MS_AUM    ;
+%let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+infile 'C:\Users\Mikhail\Desktop\Funds\RAW\ms_aum.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+informat id best32. ;
+informat date DATE7. ;
+informat aum comma32.0 ;
+format id best12. ;
+format date DATE7. ;
+format aum comma32.2 ;
+input
+id
+date
+aum
+;
+if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+run;
+
+
+  data WORK.MS_ret    ;
+%let _EFIERR_ = 0; /* set the ERROR detection macro variable */
+infile 'C:\Users\Mikhail\Desktop\Funds\RAW\ms_ret.csv' delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
+informat id best32. ;
+informat date DATE7. ;
+informat ret comma12.2 ;
+format id best12. ;
+format date DATE7. ;
+format ret comma12.2 ;
+input
+id
+date
+ret
+;
+if _ERROR_ then call symputx('_EFIERR_',1);  /* set ERROR detection macro variable */
+run;
+
+proc sql;
+create table ms_ret_full
+as select a.*,b.*
+from ms_ret as a left join ms_aum as b
+on a.id=b.id and a.date=b.date;
+quit;
+
+proc sort data=ms_ret_full;
+by id date;
+quit;
+
+data ms_ret_final;
+set ms_ret_full;
+where id;
+aum=aum/1000000;
+run;
+
+
+	 
