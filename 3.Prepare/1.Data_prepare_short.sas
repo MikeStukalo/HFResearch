@@ -199,75 +199,132 @@ from returns_temp1 as a left join factors as b
 on a.monthnum=b.monthnum_fact;
 quit;
 
-*create 24 month window;
-proc sql;
-create table returns24
-as select distinct a.*,b.*
-from returns_temp1 (drop=exret) as a left join returns_temp2 (drop=rf date year month ret monthnum) as b
-on a.fund_id=b.fund_id and 0<=a.monthnum-b.monthnum_fact<=23;
-quit;
+*divide into two data periods 2011-2012 and 2013-2014;
+data _2011_12;
+set returns_temp2;
+if year>=2011 and year<2013;
+where ret;
+run;
+proc sort data=_2011_12;by fund_id year month; quit;
 
+data _2013_14;
+set returns_temp2;
+if year>=2013 and year<2015;
+where ret;
+run;
+proc sort data=_2013_14;by fund_id year month; quit;
 
-proc sort data=returns24; by fund_id monthnum monthnum_fact; quit;
-data returns24;set returns24; if year=>2009 and monthnum<=425;run;
 
 
 **Getting beta estimates first and calculate monthly alphas;
 %let CAPM=mktrf;
-%let FF3=mktrf SMB HML;
+%let FF3=mktrf smb hml;
+%let FF4=mktrf smb hml mom;
 %let FH7=PTFSBD PTFSFX PTFSCOM FRTCM10 BAAMTSY SNPMRF SCMLC;
 
+* For 2011-2012 period;
 ods graphics off;
-proc reg data=returns24 outest=capm tableout ADJRSQ noprint;
+proc reg data=_2011_12 outest=capm_1112 tableout ADJRSQ noprint;
 model exRet=&CAPM;
-by fund_id monthnum;
+by fund_id;
 quit;
-proc reg data=returns24 outest=ff3 tableout ADJRSQ noprint;
+proc reg data=_2011_12 outest=ff3_1112 tableout ADJRSQ noprint;
 model exRet=&FF3;
-by fund_id monthnum;
+by fund_id;
 quit;
-proc reg data=returns24 outest=fh7 tableout ADJRSQ noprint;
+proc reg data=_2011_12 outest=ff4_1112 tableout ADJRSQ noprint;
+model exRet=&FF4;
+by fund_id;
+quit;
+proc reg data=_2011_12 outest=fh7_1112 tableout ADJRSQ noprint;
 model exRet=&FH7;
-by fund_id monthnum;
+by fund_id;
 quit;
 
-data model1;set capm(keep=fund_id _MODEL_ monthnum _ADJRSQ_ _TYPE_ Intercept &CAPM _EDF_) ;if _MODEL_="MODEL1" and _TYPE_="PARMS" and _EDF_>=22;rename _ADJRSQ_=R2_CAPM;rename Intercept=exante_a_CAPM;rename MKTRF=MKTRF_CAPM;drop _MODEL_;attrib _all_ label=' '; run;
-data model2;set ff3(keep=fund_id _MODEL_ monthnum _ADJRSQ_ _TYPE_ Intercept &FF3 _EDF_) ;if _MODEL_="MODEL1" and _TYPE_="PARMS" and _EDF_>=20;rename _ADJRSQ_=R2_FF3;rename Intercept=exante_a_FF3;rename MKTRF=MKTRF_FF3; rename SMB=SMB_FF3; rename HML=HML_FF3;drop _MODEL_;attrib _all_ label=' '; run;
-data model3;set fh7(keep=fund_id _MODEL_ monthnum _ADJRSQ_ _TYPE_ Intercept &FH7 _EDF_) ;if _MODEL_="MODEL1" and _TYPE_="PARMS" and _EDF_>=16;rename _ADJRSQ_=R2_FH7;rename Intercept=exante_a_FH7;rename PTFSBD=PTFSBD_FH7;rename PTFSFX=PTFSFX_FH7;rename PTFSCOM=PTFSCOM_FH7;rename FRTCM10=FRTCM10_FH7;rename BAAMTSY=BAAMTSY_FH7;rename SNPMRF=SNPMRF_FH7;rename SCMLC=SCMLC_FH7;drop _MODEL_;attrib _all_ label=' '; run;
+data model1;set capm_1112(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &CAPM) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_CAPM;rename Intercept=int_CAPM;rename MKTRF=MKTRF_CAPM;drop _MODEL_;attrib _all_ label=' '; run;
+data model2;set ff3_1112(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &FF3) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_FF3;rename Intercept=int_FF3;rename MKTRF=MKTRF_FF3; rename SMB=SMB_FF3; rename HML=HML_FF3;drop _MODEL_;attrib _all_ label=' '; run;
+data model3;set ff4_1112(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &FF4) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_FF4;rename Intercept=int_FF4;rename MKTRF=MKTRF_FF4; rename SMB=SMB_FF4; rename HML=HML_FF4;rename mom=mom_FF4;drop _MODEL_;attrib _all_ label=' '; run;
+data model4;set fh7_1112(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &FH7) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_FH7;rename Intercept=int_FH7;rename PTFSBD=PTFSBD_FH7;rename PTFSFX=PTFSFX_FH7;rename PTFSCOM=PTFSCOM_FH7;rename FRTCM10=FRTCM10_FH7;rename BAAMTSY=BAAMTSY_FH7;rename SNPMRF=SNPMRF_FH7;rename SCMLC=SCMLC_FH7;drop _MODEL_;attrib _all_ label=' '; run;
 
-data modelest;merge model1 model2 model3;by fund_id monthnum;run;
-data modelest;set modelest;rename monthnum=mn;run;
-* Calculate out of sample residual ;
+data modelest_1112;merge model1 model2 model3 model4;by fund_id;run;
+
 *Join return and factor data with regression coefficients;
 proc sql;
-create table alpha1
+create table alpha_1112
 as select distinct a.*,b.*
-from returns_temp2 as a left join modelest as b
-on a.fund_id=b.fund_id and a.monthnum=b.mn+1;
+from _2011_12 as a left join modelest_1112 as b
+on a.fund_id=b.fund_id;
 quit;
 
-proc sort data=alpha1; by fund_id year month; quit;
-data alpha1; set alpha1; if year>=2009 and monthnum<=425; run;
-
-data alpha_m;set alpha1(where=(_TYPE_="PARMS"));
-resid_CAPM=exret-exante_a_CAPM-mktrf_CAPM*mktrf;
-resid_FF3=exret-exante_a_FF3-mktrf_FF3*mktrf-SMB_FF3*SMB-HML_FF3*HML;
-resid_FH7=exret-exante_a_FH7-PTFSBD_FH7*PTFSBD-PTFSFX_FH7*PTFSFX-PTFSCOM_FH7*PTFSCOM-FRTCM10_FH7*FRTCM10-BAAMTSY_FH7*BAAMTSY-SNPMRF_FH7*SNPMRF-SCMLC_FH7*SCMLC;
-keep fund_id year month monthnum ret rf exret exante_a_CAPM exante_a_FF3 exante_a_FH7 resid_CAPM resid_FF3 resid_FH7;
+data alpha_1112_m;set alpha_1112;
+resid_CAPM=exret-int_CAPM-mktrf_CAPM*mktrf;
+resid_FF3=exret-int_FF3-mktrf_FF3*mktrf-SMB_FF3*SMB-HML_FF3*HML;
+resid_FF4=exret-int_FF4-mktrf_FF3*mktrf-SMB_FF3*SMB-HML_FF3*HML-mom_FF4*mom ;
+resid_FH7=exret-int_FH7-PTFSBD_FH7*PTFSBD-PTFSFX_FH7*PTFSFX-PTFSCOM_FH7*PTFSCOM-FRTCM10_FH7*FRTCM10-BAAMTSY_FH7*BAAMTSY-SNPMRF_FH7*SNPMRF-SCMLC_FH7*SCMLC;
+a_CAPM=resid_CAPM+int_CAPM;
+a_FF3=resid_FF3+int_FF3;
+a_FF4=resid_FF4+int_FF4;
+a_FH7=resid_FH7+int_FH7;
+keep fund_id id year month monthnum ret aum rf exret int_CAPM int_FF3 int_FF4 int_FH7 a_CAPM a_FF3 a_FF4 a_FH7 resid_CAPM resid_FF3 resid_FF4 resid_FH7;
 run;
 
-*add alpha to base_db;
-proc sql;
-create table base_db_1
-as select distinct a.*, b.*
-from base_db as a left join alpha_m (keep=fund_id year month monthnum exret exante_a_CAPM exante_a_FF3 exante_a_FH7 resid_CAPM resid_FF3 resid_FH7)  as b
-on a.fund_id=b.fund_id and a.monthnum=b.monthnum;
+* For 2013-2014 period;
+ods graphics off;
+proc reg data=_2013_14 outest=capm_1314 tableout ADJRSQ noprint;
+model exRet=&CAPM;
+by fund_id;
 quit;
+proc reg data=_2013_14 outest=ff3_1314 tableout ADJRSQ noprint;
+model exRet=&FF3;
+by fund_id;
+quit;
+proc reg data=_2013_14 outest=ff4_1314 tableout ADJRSQ noprint;
+model exRet=&FF4;
+by fund_id;
+quit;
+proc reg data=_2013_14 outest=fh7_1314 tableout ADJRSQ noprint;
+model exRet=&FH7;
+by fund_id;
+quit;
+
+data model1_1;set capm_1314(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &CAPM) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_CAPM;rename Intercept=int_CAPM;rename MKTRF=MKTRF_CAPM;drop _MODEL_;attrib _all_ label=' '; run;
+data model2_1;set ff3_1314(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &FF3) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_FF3;rename Intercept=int_FF3;rename MKTRF=MKTRF_FF3; rename SMB=SMB_FF3; rename HML=HML_FF3;drop _MODEL_;attrib _all_ label=' '; run;
+data model3_1;set ff4_1314(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &FF4) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_FF4;rename Intercept=int_FF4;rename MKTRF=MKTRF_FF4; rename SMB=SMB_FF4; rename HML=HML_FF4;rename mom=mom_FF4;drop _MODEL_;attrib _all_ label=' '; run;
+data model4_1;set fh7_1314(keep=fund_id _MODEL_ _ADJRSQ_ _TYPE_ Intercept &FH7) ;if _MODEL_="MODEL1" and _TYPE_="PARMS";rename _ADJRSQ_=R2_FH7;rename Intercept=int_FH7;rename PTFSBD=PTFSBD_FH7;rename PTFSFX=PTFSFX_FH7;rename PTFSCOM=PTFSCOM_FH7;rename FRTCM10=FRTCM10_FH7;rename BAAMTSY=BAAMTSY_FH7;rename SNPMRF=SNPMRF_FH7;rename SCMLC=SCMLC_FH7;drop _MODEL_;attrib _all_ label=' '; run;
+
+data modelest_1314;merge model1_1 model2_1 model3_1 model4_1;by fund_id;run;
+
+*Join return and factor data with regression coefficients;
+proc sql;
+create table alpha_1314
+as select distinct a.*,b.*
+from _2013_14 as a left join modelest_1314 as b
+on a.fund_id=b.fund_id;
+quit;
+
+data alpha_1314_m;set alpha_1314;
+resid_CAPM=exret-int_CAPM-mktrf_CAPM*mktrf;
+resid_FF3=exret-int_FF3-mktrf_FF3*mktrf-SMB_FF3*SMB-HML_FF3*HML;
+resid_FF4=exret-int_FF4-mktrf_FF3*mktrf-SMB_FF3*SMB-HML_FF3*HML-mom_FF4*mom ;
+resid_FH7=exret-int_FH7-PTFSBD_FH7*PTFSBD-PTFSFX_FH7*PTFSFX-PTFSCOM_FH7*PTFSCOM-FRTCM10_FH7*FRTCM10-BAAMTSY_FH7*BAAMTSY-SNPMRF_FH7*SNPMRF-SCMLC_FH7*SCMLC;
+a_CAPM=resid_CAPM+int_CAPM;
+a_FF3=resid_FF3+int_FF3;
+a_FF4=resid_FF4+int_FF4;
+a_FH7=resid_FH7+int_FH7;
+keep fund_id id year month monthnum ret aum rf exret int_CAPM int_FF3 int_FF4 int_FH7 a_CAPM a_FF3 a_FF4 a_FH7 resid_CAPM resid_FF3 resid_FF4 resid_FH7;
+run;
+
+*Merge two sets;
+data alpha;
+set alpha_1112_m alpha_1314_m;
+run;
+
+proc sort data=alpha nodupkey; by fund_id monthnum;quit;
 
 
 * Add to database;
 data data.base_db_4;
-set base_db_1;
+set alpha;
 run;
 proc sort data=data.base_db_4; by Fund_id monthnum;quit;
 

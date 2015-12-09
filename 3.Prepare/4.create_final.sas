@@ -58,8 +58,8 @@ quit;
 
 *Reorder the columns;
 data full_db_final;
-   retain Fund_id un_id Name companyname Fund_Name offsh curr usd year month monthnum pctowned aum invdelta ret gret 
-exante_a_CAPM exante_a_FF3 exante_a_FH7 resid_CAPM resid_FF3 resid_FH7 style_master incep mfee ifee lev lockup 
+   retain Fund_id un_id id Name companyname Fund_Name offsh curr usd year month monthnum pctowned aum invdelta ret gret rf exret
+a_CAPM int_CAPM resid_CAPM a_FF3 int_FF3 resid_FF3 a_FF4 int_FF4 resid_FF4 a_FH7 int_FH7 resid_FH7 style_master incep mfee ifee lev lockup 
 redem hwm;
    set full_database_delta;
   run;
