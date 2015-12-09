@@ -324,7 +324,7 @@ proc sort data=alpha nodupkey; by fund_id monthnum;quit;
 
 proc sql;
 create table db
-as select distinct a.*, b.pctowned
+as select distinct a.*, b.pctowned, b.Fund_name
 from alpha as a left join base_db as b
 on a.fund_id=b.fund_id and a.year=b.year and a.month=b.month;
 quit;
