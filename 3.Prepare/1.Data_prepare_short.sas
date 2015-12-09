@@ -319,12 +319,23 @@ data alpha;
 set alpha_1112_m alpha_1314_m;
 run;
 
+
 proc sort data=alpha nodupkey; by fund_id monthnum;quit;
 
+proc sql;
+create table db
+as select distinct a.*, b.pctowned
+from alpha as a left join base_db as b
+on a.fund_id=b.fund_id and a.year=b.year and a.month=b.month;
+quit;
+
+proc sort data=db nodupkey; by fund_id monthnum;quit;
+
+data db_final; set db; where pctowned;run;
 
 * Add to database;
 data data.base_db_4;
-set alpha;
+set db_final;
 run;
 proc sort data=data.base_db_4; by Fund_id monthnum;quit;
 
